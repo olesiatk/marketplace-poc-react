@@ -104,8 +104,8 @@ export class App implements OnDestroy {
 
   constructor() {
     Promise.all([
-      fetch("/data/products.json").then((r) => r.json()),
-      fetch("/data/reviews.json").then((r) => r.json()),
+      fetch("data/products.json").then((r) => r.json()),
+      fetch("data/reviews.json").then((r) => r.json()),
     ])
       .then(([products, reviews]: [Product[], ReviewsMap]) => {
         this.products.set(products);
