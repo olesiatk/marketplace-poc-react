@@ -1,0 +1,35 @@
+/* The one deliberate exception to the app-wide sharp-corners rule — a
+   round "?" tour-trigger badge, matching the help-icon convention used
+   across other POCs on the site, in the app's own brand green. */
+.how-it-works-trigger {
+  border-radius: 50% !important;
+}
+
+/* Frosted-glass search bar / suggestions dropdown — translucent, blurred
+   backdrop, and a soft light rim instead of the app's usual solid white
+   fill + heavy 2px black border. */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 8px 32px rgba(23, 23, 23, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+/* The suggestions list needs more opacity than the input bar for the
+   list-item text underneath to stay comfortably readable. */
+.glass-panel--opaque {
+  background: rgba(255, 255, 255, 0.88);
+}
+
+/* Search bar tinted red on an empty-query submit attempt — same rim/glow
+   treatment as .glass-panel, just re-colored to match the error message
+   text color (#b3441f) shown below the bar. */
+.glass-panel--error {
+  border-color: rgba(179, 68, 31, 0.55);
+  box-shadow:
+    0 8px 32px rgba(179, 68, 31, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}

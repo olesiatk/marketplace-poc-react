@@ -1,0 +1,97 @@
+<section class="mx-auto max-w-6xl px-8 pt-16 pb-10 text-center">
+  <h1 class="text-3xl sm:text-5xl font-black uppercase leading-tight mb-5 inline-flex items-center gap-3 flex-wrap justify-center">
+    <span>Marketplace filter <span class="text-gradient-brand">with AI</span></span>
+    <button
+      type="button"
+      (click)="howItWorks.emit()"
+      aria-label="How it works"
+      title="How it works"
+      class="how-it-works-trigger inline-flex items-center justify-center w-4 h-4 border border-brand-dark text-brand-dark text-sm font-normal leading-none normal-case hover:bg-brand-dark hover:text-white transition-colors align-middle"
+    >
+      ?
+    </button>
+  </h1>
+  <p class="max-w-xl mx-auto text-body text-sm sm:text-[15px] leading-relaxed mb-8">
+    Describe what you need, by text or by voice — and AI will match products from the catalog based on their
+    attributes and customer reviews.
+  </p>
+
+  <form
+    (submit)="onSubmit($event)"
+    data-tour="search-form"
+    class="glass-panel relative z-30 max-w-2xl mx-auto flex items-center gap-2.5 pl-5 pr-2 py-2"
+    [class.glass-panel--error]="emptyQueryError()"
+  >
+    <app-icon name="search" [size]="20" class="text-body shrink-0" />
+    <input
+      type="text"
+      [value]="value()"
+      (input)="onInput($event)"
+      (focus)="onFocus()"
+      (blur)="onBlur()"
+      (keydown.escape)="onEscape()"
+      autocomplete="off"
+      placeholder='e.g. "an outdoor table for the balcony"'
+      [attr.aria-invalid]="emptyQueryError() ? true : null"
+      class="flex-1 min-w-0 border-none outline-none bg-transparent text-[15px] placeholder:text-neutral-400"
+    />
+    <button
+      type="button"
+      (click)="onMicClick()"
+      title="Voice search"
+      aria-label="Voice search"
+      data-tour="mic-button"
+      class="shrink-0 w-10 h-10 flex items-center justify-center transition-colors"
+      [class]="isListening() ? 'bg-[#e0442e] text-white animate-mic-pulse' : 'bg-surface text-ink hover:bg-neutral-200'"
+    >
+      <app-icon name="mic" [size]="18" />
+    </button>
+    <button
+      type="submit"
+      [disabled]="isSearching()"
+      class="cta-label shrink-0 bg-gradient-brand transition-color disabled:opacity-60 text-white hover:text-ink uppercase text-xs tracking-wide"
+    >
+      {{ isSearching() ? "Searching…" : "AI Search" }}
+    </button>
+
+    @if (suggestions().length > 0) {
+      <ul class="glass-panel glass-panel--opaque absolute top-full left-0 right-0 mt-1.5 text-left z-10 max-h-80 overflow-y-auto">
+        @for (suggestion of suggestions(); track suggestion.query) {
+          <li>
+            <button
+              type="button"
+              (mousedown)="$event.preventDefault()"
+              (click)="selectSuggestion(suggestion)"
+              class="w-full flex items-center gap-2.5 px-5 py-2.5 text-[14px] text-left hover:bg-surface transition-colors"
+            >
+              <app-icon name="search" [size]="14" class="text-body shrink-0" />
+              <span class="truncate">{{ typedPart(suggestion) }}<strong class="text-ink font-bold">{{ suggestion.completion }}</strong></span>
+            </button>
+          </li>
+        }
+      </ul>
+    }
+  </form>
+
+  <div class="max-w-2xl mx-auto mt-3.5 min-h-[18px] text-[13px] font-semibold flex items-center justify-center gap-3 flex-wrap">
+    @if (emptyQueryError()) {
+      <span class="text-[#b3441f]">Type something to search for — the field is empty.</span>
+    }
+    @if (statusMessage()) {
+      <span class="text-gradient-brand">{{ statusMessage() }}</span>
+    }
+    @if (voiceError() === "not-supported") {
+      <span class="text-[#b3441f]">
+        Voice input isn't supported in this browser. Try Chrome, or type your query instead.
+      </span>
+    }
+    @if (voiceError() && voiceError() !== "not-supported") {
+      <span class="text-[#b3441f]">Voice input error: {{ voiceError() }}</span>
+    }
+    @if (modeLabel(); as label) {
+      <span class="text-[11px] font-bold uppercase tracking-wide bg-surface text-ink px-2.5 py-1">
+        {{ label }}
+      </span>
+    }
+  </div>
+</section>
