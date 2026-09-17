@@ -1,13 +1,12 @@
-import { environment } from "../../environments/environment";
 import { localHeuristicSearch, tokenize } from "./search";
 import type { AiMode, MatchesMap, Product, ReviewsMap } from "../models/product.model";
 
 const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
-const API_KEY = environment.groqApiKey;
+const API_KEY = import.meta.env["VITE_GROQ_API_KEY"];
 // "llama-3.1-8b-instant"/"llama-3.3-70b-versatile" have been retired from
 // Groq's catalog — gpt-oss-20b is a currently-available, JSON-mode-capable
 // replacement. Verified live against this project's Groq account.
-const MODEL = environment.groqModel || "openai/gpt-oss-20b";
+const MODEL = import.meta.env["VITE_GROQ_MODEL"] || "openai/gpt-oss-20b";
 
 export const isGroqConfigured = Boolean(API_KEY);
 

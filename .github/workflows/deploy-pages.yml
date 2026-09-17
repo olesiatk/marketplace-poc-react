@@ -32,16 +32,16 @@ jobs:
 
       # GROQ_API_KEY is optional. If it's not set as a repo secret, the app
       # builds with no key and the AI search falls back to local heuristic
-      # search (see isGroqConfigured in src/app/lib/groq.ts). Add a
+      # search (see isGroqConfigured in src/lib/groq.ts). Add a
       # GROQ_API_KEY secret in repo Settings > Secrets and Actions, then
       # re-run this workflow, to enable live Groq search on the deployed site.
       # Note: because this is a static site, the key ends up readable in the
       # public JS bundle — only use a key you're fine exposing publicly.
       - name: Write .env
-        run: echo "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" > .env
+        run: echo "VITE_GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" > .env
 
       - name: Build
-        run: npm run build -- --configuration production --base-href /poc-ai-marketplace/
+        run: npm run build -- --base=/poc-ai-marketplace/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -49,7 +49,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist/ai-furniture-marketplace-poc/browser
+          path: dist
 
   deploy:
     needs: build

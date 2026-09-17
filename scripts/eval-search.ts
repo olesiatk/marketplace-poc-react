@@ -20,8 +20,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { localHeuristicSearch, tokenize } from "../src/app/lib/search.ts";
-import type { MatchesMap, Product, ReviewsMap } from "../src/app/models/product.model.ts";
+import { localHeuristicSearch, tokenize } from "../src/lib/search.ts";
+import type { MatchesMap, Product, ReviewsMap } from "../src/models/product.model.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, "..");

@@ -36,20 +36,11 @@
 
 html,
 body,
-app-root {
+#root {
   background: rgb(249, 249, 249);
   color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
-}
-
-/* Unknown custom elements default to display:inline, which makes an
-   inline box containing block-level content (everything App renders)
-   report an ill-defined, unreliable size — exactly what the ResizeObserver
-   in iframe-resize.ts measures to report content height to an embedding
-   host. Block makes that measurement well-defined and stable. */
-app-root {
-  display: block;
 }
 
 h1,

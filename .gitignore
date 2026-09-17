@@ -14,9 +14,6 @@ yarn-error.log
 # Secrets
 .env
 .env.local
-# Regenerated from .env by scripts/set-env.js before every `npm start`/`npm run build`
-# (see package.json's prestart/prebuild) — never hand-edit or commit it, it holds the real key.
-/src/environments/environment.ts
 
 # IDEs and editors
 .idea/
@@ -37,7 +34,6 @@ yarn-error.log
 .history/*
 
 # Miscellaneous
-/.angular/cache
 .sass-cache/
 /connect.lock
 /coverage
