@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
+import { PoweredBy } from "react-instantsearch";
 import { Icon } from "../Icon/Icon";
 import { useVoiceInput } from "../../hooks/useVoiceInput";
 import { getSuggestions, type SearchVocabulary, type Suggestion } from "../../lib/suggestions";
-import type { AiMode } from "../../models/product.model";
 import "./Hero.css";
 
 export interface HeroProps {
@@ -10,7 +10,6 @@ export interface HeroProps {
   onValueChange: (value: string) => void;
   isSearching: boolean;
   statusMessage: string;
-  aiMode: AiMode;
   vocabulary: SearchVocabulary;
   onSubmitQuery: (query: string) => void;
   onHowItWorks: () => void;
@@ -21,7 +20,7 @@ function typedPart(suggestion: Suggestion): string {
   return suggestion.query.slice(0, suggestion.query.length - suggestion.completion.length);
 }
 
-export function Hero({ value, onValueChange, isSearching, statusMessage, aiMode, vocabulary, onSubmitQuery, onHowItWorks }: HeroProps) {
+export function Hero({ value, onValueChange, isSearching, statusMessage, vocabulary, onSubmitQuery, onHowItWorks }: HeroProps) {
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [emptyQueryError, setEmptyQueryError] = useState(false);
@@ -43,11 +42,6 @@ export function Hero({ value, onValueChange, isSearching, statusMessage, aiMode,
     () => (showSuggestions ? getSuggestions(value, vocabulary) : []),
     [showSuggestions, value, vocabulary]
   );
-
-  // Deliberately no specific model name here — Groq's catalog changes
-  // over time (VITE_GROQ_MODEL can be swapped independently), so a
-  // hardcoded name here would just go stale again.
-  const modeLabel = aiMode === "groq" ? "AI: Groq" : aiMode === "local" ? "Local AI mode" : null;
 
   function onMicClick(): void {
     setVoiceError(null);
@@ -101,7 +95,7 @@ export function Hero({ value, onValueChange, isSearching, statusMessage, aiMode,
   return (
     <section className="mx-auto max-w-6xl px-8 pt-16 pb-10 text-center">
       <h1 className="text-3xl sm:text-5xl font-black uppercase leading-tight mb-5 inline-flex items-center gap-3 flex-wrap justify-center">
-        <span>Marketplace filter <span className="text-gradient-brand">with AI</span></span>
+        <span>Marketplace filter <span className="text-gradient-brand">with Algolia</span></span>
         <button
           type="button"
           onClick={onHowItWorks}
@@ -113,8 +107,8 @@ export function Hero({ value, onValueChange, isSearching, statusMessage, aiMode,
         </button>
       </h1>
       <p className="max-w-xl mx-auto text-body text-sm sm:text-[15px] leading-relaxed mb-8">
-        Describe what you need, by text or by voice — and AI will match products from the catalog based on their
-        attributes and customer reviews.
+        Describe what you need, by text or by voice — Algolia matches products from the catalog instantly,
+        typo-tolerant and synonym-aware, based on their attributes and customer reviews.
       </p>
 
       <form
@@ -150,7 +144,7 @@ export function Hero({ value, onValueChange, isSearching, statusMessage, aiMode,
           disabled={isSearching}
           className="cta-label shrink-0 bg-gradient-brand transition-color disabled:opacity-60 text-white hover:text-ink uppercase text-xs tracking-wide"
         >
-          {isSearching ? "Searching…" : "AI Search"}
+          {isSearching ? "Searching…" : "Search"}
         </button>
 
         {suggestions.length > 0 && (
@@ -175,6 +169,11 @@ export function Hero({ value, onValueChange, isSearching, statusMessage, aiMode,
         )}
       </form>
 
+      {/* Required by Algolia's free-tier terms: the logo must appear next to the search bar. */}
+      <div className="max-w-2xl mx-auto mt-2 flex justify-end">
+        <PoweredBy className="opacity-70" />
+      </div>
+
       <div className="max-w-2xl mx-auto mt-3.5 min-h-[18px] text-[13px] font-semibold flex items-center justify-center gap-3 flex-wrap">
         {emptyQueryError && <span className="text-[#b3441f]">Type something to search for — the field is empty.</span>}
         {statusMessage && <span className="text-gradient-brand">{statusMessage}</span>}
@@ -185,11 +184,6 @@ export function Hero({ value, onValueChange, isSearching, statusMessage, aiMode,
         )}
         {voiceError && voiceError !== "not-supported" && (
           <span className="text-[#b3441f]">Voice input error: {voiceError}</span>
-        )}
-        {modeLabel && (
-          <span className="text-[11px] font-bold uppercase tracking-wide bg-surface text-ink px-2.5 py-1">
-            {modeLabel}
-          </span>
         )}
       </div>
     </section>

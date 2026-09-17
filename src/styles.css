@@ -10,7 +10,6 @@
   --color-body: #55564f;
   --color-highlight: #ffe066;
   --color-highlight-line: #f2d774;
-  --color-highlight-synonym: #bbf7d0;
   --font-sans: "Source Sans Pro";
   --font-heading: "Futura Now Extra Black", Futura, var(--font-sans);
   --font-cta: var(--font-heading);
@@ -132,16 +131,28 @@ button:disabled,
   -webkit-text-fill-color: var(--color-brand-dark);
 }
 
-mark.hl {
+mark.ais-Highlight-highlighted,
+mark.ais-Snippet-highlighted {
   background: var(--color-highlight);
   color: var(--color-ink);
   padding: 0 2px;
 }
 
-mark.hl-synonym {
-  background: var(--color-highlight-synonym);
-  color: var(--color-ink);
-  padding: 0 2px;
+/* react-instantsearch ships no default sizing for its own components — we
+   don't import instantsearch.css (its full reset theme clashes with
+   Tailwind), so <PoweredBy>'s SVG logo needs explicit dimensions or it
+   renders at 0x0. */
+.ais-PoweredBy {
+  display: inline-flex;
+}
+.ais-PoweredBy-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+}
+.ais-PoweredBy-logo {
+  height: 16px;
+  width: auto;
 }
 
 /* CTA button label — "AI Search", "Reset all", "Load more" — same

@@ -1,14 +1,12 @@
 /**
- * Furniture-domain concept groups for query expansion. Each group is a set
- * of words and short phrases that express the same underlying concept —
- * used to expand a user's query beyond its literal tokens so that e.g.
- * searching "cosy" also surfaces products described as "cozy" or "plush
- * cushions", without needing a vector index.
- *
- * This is a lightweight, deterministic stand-in for semantic recall: it
- * catches synonym and contextual-phrase matches within the fixed catalog
- * vocabulary, but — unlike real embeddings — it can only find an expansion
- * term that appears verbatim somewhere in a product's text.
+ * Furniture-domain concept groups: each is a set of words and short phrases
+ * that express the same underlying concept, e.g. "cosy"/"cozy"/"plush
+ * cushions". Two consumers:
+ * - scripts/index-algolia.ts pushes each group to Algolia as a synonym set,
+ *   so searching "cosy" also surfaces products only ever described as
+ *   "cozy" or "comfortable".
+ * - suggestions.ts uses the group headwords to seed the search-box
+ *   autocomplete's "next word" suggestions.
  */
 export const CONCEPT_GROUPS: readonly (readonly string[])[] = [
   [
@@ -45,28 +43,3 @@ export const CONCEPT_GROUPS: readonly (readonly string[])[] = [
   ["kitchen", "dining room", "dining area", "family meals"],
   ["smooth", "slides easily", "glides", "opens easily"],
 ];
-
-/**
- * Given a set of literal query tokens and the raw (lowercased) query text,
- * returns every other term from any concept group the query touches —
- * whether by an exact token match (single-word terms) or a substring match
- * (multi-word phrases, which never survive tokenization intact).
- */
-export function expandConcepts(tokens: ReadonlySet<string>, lowerQuery: string): Set<string> {
-  const expansions = new Set<string>();
-
-  for (const group of CONCEPT_GROUPS) {
-    const queryTouchesGroup = group.some((term) =>
-      term.includes(" ") ? lowerQuery.includes(term) : tokens.has(term)
-    );
-    if (!queryTouchesGroup) continue;
-
-    for (const term of group) {
-      if (term.includes(" ") ? !lowerQuery.includes(term) : !tokens.has(term)) {
-        expansions.add(term);
-      }
-    }
-  }
-
-  return expansions;
-}

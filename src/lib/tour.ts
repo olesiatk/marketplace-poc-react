@@ -2,9 +2,10 @@ import { driver, type Driver } from "driver.js";
 import { sendScrollIntoView } from "./post-message";
 
 /**
- * A query proven to trigger both an exact match ("armchair") and a
- * synonym/concept match ("cosy" → "comfortable"/"cozy") on the same card,
- * so the live demo step shows off both highlight colors.
+ * A query proven to return real results: "armchair" matches directly, and
+ * "cosy" matches via the furniture concept groups (src/lib/synonyms.ts)
+ * pushed to Algolia as index synonyms by scripts/index-algolia.ts, even
+ * though the catalog only ever spells it "cozy"/"comfortable".
  */
 export const DEMO_QUERY = "cosy armchair";
 
@@ -81,9 +82,9 @@ export function createTour(actions: TourActions): Driver {
       {
         element: '[data-tour="search-form"]',
         popover: {
-          title: "Search with AI",
+          title: "Search with Algolia",
           description:
-            "Type what you're looking for in plain language — material, room, mood. Suggestions appear as you type, and the AI matches products by their attributes and customer reviews — not just exact words.",
+            "Type what you're looking for in plain language — material, room, mood. Suggestions appear as you type, and Algolia matches products by their attributes and customer reviews — typo-tolerant and synonym-aware, not just exact words.",
         },
       },
       {
@@ -98,7 +99,7 @@ export function createTour(actions: TourActions): Driver {
         popover: {
           title: "Fine-tune with filters",
           description:
-            "Narrow the catalog by category, room, material, or price. Filters combine with your AI search.",
+            "Narrow the catalog by category, room, material, or price. Filters combine with your search.",
         },
       },
       {
@@ -117,9 +118,9 @@ export function createTour(actions: TourActions): Driver {
         element: '[data-tour="first-product-card"]',
         waitForElement: 2000,
         popover: {
-          title: "AI matches",
+          title: "Ranked by relevance",
           description:
-            'Matched products are labeled and ranked by relevance. Click "Next" to open this one and see the matched words highlighted.',
+            'Results are ranked by relevance, with matched words highlighted right in the card. Click "Next" to open this one and see the full match.',
           onNextClick: async (_element, _step, opts) => {
             actions.openFirstResult();
             await waitForLaidOutElement('[data-tour="product-modal"]');
@@ -132,8 +133,7 @@ export function createTour(actions: TourActions): Driver {
         waitForElement: 2000,
         popover: {
           title: "Highlighted matches",
-          description:
-            "Exact query words are highlighted in yellow, similar or synonym terms in green — so you can see exactly why a product matched.",
+          description: "Matched query words are highlighted right on the product's own attributes and reviews.",
         },
       },
     ],

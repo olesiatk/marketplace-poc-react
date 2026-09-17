@@ -1,11 +1,12 @@
-import { describe, expect, it } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { ProductGrid } from "./ProductGrid";
-import type { MatchesMap, Product, ReviewsMap } from "../../models/product.model";
+import type { ProductHit } from "../../models/product.model";
 
-function makeProducts(count: number, prefix = "p"): Product[] {
+function makeHits(count: number, prefix = "p"): ProductHit[] {
   return Array.from({ length: count }, (_, i) => ({
     id: `${prefix}-${i}`,
+    objectID: `${prefix}-${i}`,
     name: `Product ${i}`,
     category: "Category",
     icon: "decor",
@@ -16,19 +17,27 @@ function makeProducts(count: number, prefix = "p"): Product[] {
     dimensions: "10x10x10 cm",
     tags: [],
     description: "",
-  }));
+    reviews: [],
+    __position: i + 1,
+  })) as unknown as ProductHit[];
 }
 
-function setup(products: Product[]) {
-  return render(
+function setup(overrides: Partial<React.ComponentProps<typeof ProductGrid>> = {}) {
+  const onPageChange = vi.fn();
+  const products = overrides.products ?? makeHits(12);
+  const utils = render(
     <ProductGrid
       products={products}
-      reviews={{} as ReviewsMap}
-      matches={new Map() as MatchesMap}
+      totalCount={products.length}
+      currentPage={1}
+      totalPages={1}
+      onPageChange={onPageChange}
       onSelect={() => {}}
       onClearQuery={() => {}}
+      {...overrides}
     />
   );
+  return { ...utils, onPageChange };
 }
 
 // Each product card renders exactly one <h3> (the product name) — a
@@ -39,57 +48,50 @@ function cardCount(container: HTMLElement): number {
 }
 
 describe("ProductGrid pagination", () => {
-  it("shows only the first 12 products by default and renders pagination", () => {
-    const { container } = setup(makeProducts(20));
+  it("renders the given page's products and a pagination nav when there's more than one page", () => {
+    const { container } = setup({ products: makeHits(12), currentPage: 1, totalPages: 2 });
     expect(cardCount(container)).toBe(12);
     expect(screen.getByRole("navigation", { name: "Pagination" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "2" })).toBeInTheDocument();
   });
 
-  it("shows the remaining products on page 2 and hides them from page 1", () => {
-    const { container } = setup(makeProducts(20));
-    fireEvent.click(screen.getByRole("button", { name: "2" }));
-    expect(cardCount(container)).toBe(8);
+  it("marks the current page and calls onPageChange when another page is clicked", () => {
+    const { onPageChange } = setup({ products: makeHits(8), currentPage: 2, totalPages: 2 });
+    expect(screen.getByRole("button", { name: "2" })).toHaveAttribute("aria-current", "page");
+
+    fireEvent.click(screen.getByRole("button", { name: "1" }));
+    expect(onPageChange).toHaveBeenCalledWith(1);
   });
 
   it("disables Prev on the first page and Next on the last page", () => {
-    setup(makeProducts(20));
+    const { rerender } = setup({ currentPage: 1, totalPages: 2 });
     expect(screen.getByRole("button", { name: "‹ Prev" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Next ›" })).not.toBeDisabled();
 
-    fireEvent.click(screen.getByRole("button", { name: "2" }));
-    expect(screen.getByRole("button", { name: "‹ Prev" })).not.toBeDisabled();
-    expect(screen.getByRole("button", { name: "Next ›" })).toBeDisabled();
-  });
-
-  it("resets back to page 1 when the product list changes (a new search or filter)", () => {
-    const { container, rerender } = setup(makeProducts(20));
-    fireEvent.click(screen.getByRole("button", { name: "2" }));
-    expect(cardCount(container)).toBe(8);
-
     rerender(
       <ProductGrid
-        products={makeProducts(15, "q")}
-        reviews={{} as ReviewsMap}
-        matches={new Map() as MatchesMap}
+        products={makeHits(8)}
+        totalCount={8}
+        currentPage={2}
+        totalPages={2}
+        onPageChange={() => {}}
         onSelect={() => {}}
         onClearQuery={() => {}}
       />
     );
-    expect(cardCount(container)).toBe(12);
-    expect(screen.getByRole("button", { name: "‹ Prev" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "‹ Prev" })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: "Next ›" })).toBeDisabled();
   });
 
-  it("shows no pagination when there are 12 or fewer products", () => {
-    const { container } = setup(makeProducts(12));
-    expect(cardCount(container)).toBe(12);
+  it("shows no pagination nav when there's only one page", () => {
+    setup({ totalPages: 1 });
     expect(screen.queryByRole("navigation", { name: "Pagination" })).not.toBeInTheDocument();
   });
 
   it("collapses many pages into an ellipsis around the current page", () => {
-    setup(makeProducts(300));
+    setup({ currentPage: 12, totalPages: 25 });
     const nav = screen.getByRole("navigation", { name: "Pagination" });
-    expect(within(nav).getByText("…")).toBeInTheDocument();
+    expect(nav.textContent).toContain("…");
     expect(screen.getByRole("button", { name: "1" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "25" })).toBeInTheDocument();
   });

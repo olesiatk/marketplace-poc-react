@@ -1,3 +1,14 @@
+import type { Hit } from "instantsearch.js";
+
+export interface Review {
+  author: string;
+  rating: number;
+  text: string;
+}
+
+export type ReviewsMap = Record<string, Review[]>;
+
+/** The raw catalog shape, as stored in public/data/products.json. */
 export interface Product {
   id: string;
   name: string;
@@ -13,23 +24,15 @@ export interface Product {
   imagePrompt?: string;
 }
 
-export interface Review {
-  author: string;
-  rating: number;
-  text: string;
-}
+/**
+ * A product as stored in the Algolia index — reviews are embedded at index
+ * time (scripts/index-algolia.ts) so the client never fetches reviews.json
+ * separately.
+ */
+export type ProductRecord = Product & { reviews: Review[] };
 
-export type ReviewsMap = Record<string, Review[]>;
-
-export interface MatchInfo {
-  score: number;
-  /** Terms that are literal query words — highlighted in yellow. */
-  directTerms: Set<string>;
-  /** Synonyms/contextual phrases pulled in via concept expansion — highlighted in light green. */
-  synonymTerms: Set<string>;
-}
-
-export type MatchesMap = Map<string, MatchInfo>;
+/** An Algolia search hit for a product — adds _highlightResult/_snippetResult, read by <Highlight>/<Snippet>. */
+export type ProductHit = Hit<ProductRecord>;
 
 export interface Filters {
   category: string;
@@ -43,5 +46,3 @@ export interface FilterOptions {
   rooms: string[];
   materials: string[];
 }
-
-export type AiMode = "groq" | "local" | null;

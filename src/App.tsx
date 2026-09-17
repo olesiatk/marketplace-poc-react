@@ -1,24 +1,46 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Driver } from "driver.js";
+import {
+  Configure,
+  InstantSearch,
+  useClearRefinements,
+  useHits,
+  useInstantSearch,
+  usePagination,
+  useRange,
+  useRefinementList,
+  useSearchBox,
+} from "react-instantsearch";
+import type { RefinementListItem } from "instantsearch.js/es/connectors/refinement-list/connectRefinementList";
 import { Hero } from "./components/Hero/Hero";
 import { FiltersBar, type FilterChangeEvent } from "./components/FiltersBar/FiltersBar";
 import { ProductGrid } from "./components/ProductGrid/ProductGrid";
 import { ProductModal } from "./components/ProductModal/ProductModal";
-import { aiSearch } from "./lib/groq";
+import { ALGOLIA_INDEX_NAME, isAlgoliaConfigured, searchClient } from "./lib/algolia";
+import { wordFormProducts } from "./lib/format";
 import { watchIframeHeight } from "./lib/iframe-resize";
 import { isEmbedded, listenToHost, sendFrameReady, sendTourStatus } from "./lib/post-message";
-import { wordFormProducts } from "./lib/search";
 import { buildVocabulary } from "./lib/suggestions";
 import { DEMO_QUERY, createTour } from "./lib/tour";
-import type { AiMode, FilterOptions, Filters, MatchesMap, Product, ReviewsMap } from "./models/product.model";
+import type { FilterOptions, Filters, Product, ProductHit, ProductRecord } from "./models/product.model";
 
-const EMPTY_FILTERS: Filters = { category: "", room: "", material: "", maxPrice: Infinity };
+const HITS_PER_PAGE = 12;
 
-function uniqueSorted(arr: string[]): string[] {
-  return [...new Set(arr)].sort((a, b) => a.localeCompare(b, "en"));
+/**
+ * Single-select helper over an Algolia refinement list: `refine(value)`
+ * toggles that value on its own, so replacing the current selection with a
+ * different one (or clearing it, for `value === ""`) needs an explicit
+ * "un-refine the old one first" step — RefinementList's own UI otherwise
+ * supports multi-select, which this app's single dropdown doesn't want.
+ */
+function selectSingle(items: RefinementListItem[], refine: (value: string) => void, value: string): void {
+  const current = items.find((i) => i.isRefined);
+  if (current?.value === value) return;
+  if (current) refine(current.value);
+  if (value) refine(value);
 }
 
-export function App() {
+function AppShell() {
   // Not vh-based when embedded: 100vh inside an <iframe> resolves against
   // the iframe's own rendered height, which the host sets FROM our own
   // reported content height (poc-resize-iframe) — if content is shorter
@@ -29,149 +51,116 @@ export function App() {
   // where the iframe height isn't externally driven by us.
   const embedded = isEmbedded();
 
-  const [products, setProducts] = useState<Product[]>([]);
-  const [reviews, setReviews] = useState<ReviewsMap>({});
-  const [loadError, setLoadError] = useState<string | null>(null);
+  // Fetched once, only to build the search-box autocomplete vocabulary
+  // (src/lib/suggestions.ts) — unrelated to the Algolia-backed search/filter
+  // results below, so a failure here shouldn't block the rest of the app.
+  const [catalog, setCatalog] = useState<Product[]>([]);
+  useEffect(() => {
+    fetch("data/products.json")
+      .then((r) => r.json())
+      .then(setCatalog)
+      .catch((err) => console.warn("Failed to load catalog for search suggestions:", err));
+  }, []);
+  const searchVocabulary = useMemo(() => buildVocabulary(catalog), [catalog]);
 
-  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [searchValue, setSearchValue] = useState("");
-  const [query, setQuery] = useState("");
-  const [matches, setMatches] = useState<MatchesMap>(new Map());
-  const [aiMode, setAiMode] = useState<AiMode>(null);
-  const [isSearching, setIsSearching] = useState(false);
-  const [statusMessage, setStatusMessage] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<ProductHit | null>(null);
 
-  const priceLimit = useMemo(() => (products.length ? Math.max(...products.map((p) => p.price)) : 25000), [products]);
+  const { query, refine: refineQuery } = useSearchBox();
+  const { status } = useInstantSearch();
+  const { items: hits, results } = useHits<ProductRecord>();
+  const { refine: refinePage, currentRefinement: currentPageIndex, nbPages } = usePagination();
+  const { refine: refineClearAll } = useClearRefinements();
 
-  const searchVocabulary = useMemo(() => buildVocabulary(products), [products]);
+  const categoryList = useRefinementList({ attribute: "category", limit: 100, sortBy: ["name:asc"] });
+  const roomList = useRefinementList({ attribute: "roomFacets", limit: 100, sortBy: ["name:asc"] });
+  const materialList = useRefinementList({ attribute: "materialFacets", limit: 100, sortBy: ["name:asc"] });
+  const priceRange = useRange({ attribute: "price" });
 
-  const filterOptions = useMemo<FilterOptions>(() => {
-    if (!products.length) return { categories: [], rooms: [], materials: [] };
-    return {
-      categories: uniqueSorted(products.map((p) => p.category)),
-      rooms: uniqueSorted(products.flatMap((p) => p.room.split(",").map((s) => s.trim()))),
-      materials: uniqueSorted(
-        products.flatMap((p) => p.material.split(/[,()]/).map((s) => s.trim()).filter(Boolean))
-      ),
-    };
-  }, [products]);
+  const isSearching = status === "loading" || status === "stalled";
 
-  const filteredProducts = useMemo(() => {
-    let list = products.filter((p) => {
-      if (filters.category && p.category !== filters.category) return false;
-      if (filters.room && !p.room.toLowerCase().includes(filters.room.toLowerCase())) return false;
-      if (filters.material && !p.material.toLowerCase().includes(filters.material.toLowerCase())) return false;
-      if (p.price > filters.maxPrice) return false;
-      return true;
-    });
+  const filterOptions: FilterOptions = {
+    categories: categoryList.items.map((i) => i.value),
+    rooms: roomList.items.map((i) => i.value),
+    materials: materialList.items.map((i) => i.value),
+  };
 
-    if (query) {
-      list = list.filter((p) => matches.has(p.id));
-      list = [...list].sort((a, b) => matches.get(b.id)!.score - matches.get(a.id)!.score);
-    }
+  const priceLimit = Number.isFinite(priceRange.range.max) ? (priceRange.range.max as number) : 25000;
+  const filters: Filters = {
+    category: categoryList.items.find((i) => i.isRefined)?.value ?? "",
+    room: roomList.items.find((i) => i.isRefined)?.value ?? "",
+    material: materialList.items.find((i) => i.isRefined)?.value ?? "",
+    // Algolia's unrefined start defaults to [-Infinity, Infinity], not
+    // undefined, so a nullish check alone wouldn't fall back to priceLimit.
+    maxPrice: Number.isFinite(priceRange.start[1]) ? (priceRange.start[1] as number) : priceLimit,
+  };
 
-    return list;
-  }, [products, filters, query, matches]);
-
-  const selectedProduct = useMemo(
-    () => (selectedId ? products.find((p) => p.id === selectedId) ?? null : null),
-    [selectedId, products]
-  );
-
-  const selectedMatchInfo = useMemo(() => (selectedId ? matches.get(selectedId) ?? null : null), [selectedId, matches]);
+  const statusMessage = useMemo(() => {
+    if (!query || isSearching) return "";
+    const n = results?.nbHits ?? 0;
+    return n === 0
+      ? "No products matched your search. Try rephrasing it."
+      : `Found ${n} ${wordFormProducts(n)} for your search.`;
+  }, [query, isSearching, results]);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const tourDriverRef = useRef<Driver | null>(null);
 
   function onFilterChange(event: FilterChangeEvent): void {
-    setFilters((f) => ({ ...f, [event.field]: event.value }));
+    if (event.field === "maxPrice") {
+      priceRange.refine([undefined, Number(event.value)]);
+      return;
+    }
+    const value = String(event.value);
+    if (event.field === "category") selectSingle(categoryList.items, categoryList.refine, value);
+    else if (event.field === "room") selectSingle(roomList.items, roomList.refine, value);
+    else if (event.field === "material") selectSingle(materialList.items, materialList.refine, value);
   }
 
   function onResetFilters(): void {
-    setFilters({ ...EMPTY_FILTERS, maxPrice: priceLimit });
+    refineClearAll();
     setSearchValue("");
-    setQuery("");
-    setMatches(new Map());
-    setAiMode(null);
-    setStatusMessage("");
+    refineQuery("");
   }
 
-  async function onSearch(rawQuery: string): Promise<void> {
+  function onSearch(rawQuery: string): void {
     const trimmed = rawQuery.trim();
-    setQuery(trimmed);
-    if (!trimmed) {
-      setMatches(new Map());
-      setAiMode(null);
-      setStatusMessage("");
-      return;
-    }
-
-    setIsSearching(true);
-    setAiMode(null);
-    setStatusMessage("AI is analyzing your query…");
-    const result = await aiSearch(trimmed, latestRef.current.products, latestRef.current.reviews);
-    setMatches(result.matches);
-    setAiMode(result.mode);
-    setIsSearching(false);
-
-    if (result.matches.size === 0) {
-      setStatusMessage("AI didn't find any close matches for this query. Try rephrasing it.");
-    } else {
-      setStatusMessage(`AI matched ${result.matches.size} ${wordFormProducts(result.matches.size)} to your query.`);
-    }
+    refineQuery(trimmed);
   }
 
   function onClearQuery(): void {
     setSearchValue("");
-    setQuery("");
-    setMatches(new Map());
-    setAiMode(null);
-    setStatusMessage("");
+    refineQuery("");
   }
 
   function resetTourDemo(): void {
-    setSelectedId(null);
+    setSelectedProduct(null);
     onClearQuery();
     sendTourStatus(false);
   }
 
   // The tour driver and the iframe-embedding effect are both set up once
   // (empty-deps effects) but need to call back into whatever's current at
-  // call time (the demo search, the latest product list, the reset logic)
-  // — this ref is the React equivalent of Angular's stable `this`.
-  const latestRef = useRef({ products, reviews, filteredProducts, onSearch, resetTourDemo });
-  latestRef.current = { products, reviews, filteredProducts, onSearch, resetTourDemo };
+  // call time (the demo search, the latest hits, the reset logic) — this
+  // ref is the React equivalent of Angular's stable `this`.
+  const latestRef = useRef({ hits, onSearch, resetTourDemo });
+  latestRef.current = { hits, onSearch, resetTourDemo };
 
   function startTour(): void {
     tourDriverRef.current ??= createTour({
       runDemoSearch: async () => {
         setSearchValue(DEMO_QUERY);
-        await latestRef.current.onSearch(DEMO_QUERY);
+        latestRef.current.onSearch(DEMO_QUERY);
       },
       openFirstResult: () => {
-        const first = latestRef.current.filteredProducts[0];
-        if (first) setSelectedId(first.id);
+        const first = latestRef.current.hits[0];
+        if (first) setSelectedProduct(first);
       },
       reset: () => latestRef.current.resetTourDemo(),
     });
     sendTourStatus(true);
     tourDriverRef.current.drive();
   }
-
-  useEffect(() => {
-    Promise.all([
-      fetch("data/products.json").then((r) => r.json()),
-      fetch("data/reviews.json").then((r) => r.json()),
-    ])
-      .then(([loadedProducts, loadedReviews]: [Product[], ReviewsMap]) => {
-        setProducts(loadedProducts);
-        setReviews(loadedReviews);
-        const maxPrice = Math.max(...loadedProducts.map((p) => p.price));
-        setFilters((f) => ({ ...f, maxPrice }));
-      })
-      .catch((err) => setLoadError(err.message));
-  }, []);
 
   useEffect(() => {
     if (!rootRef.current) return;
@@ -201,14 +190,6 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (loadError) {
-    return (
-      <div className={`flex items-center justify-center text-body text-sm p-8 text-center ${!embedded ? "min-h-screen" : ""}`}>
-        Failed to load the catalog: {loadError}
-      </div>
-    );
-  }
-
   return (
     <div ref={rootRef} className={!embedded ? "min-h-screen" : ""}>
       <main>
@@ -217,7 +198,6 @@ export function App() {
           onValueChange={setSearchValue}
           isSearching={isSearching}
           statusMessage={statusMessage}
-          aiMode={aiMode}
           vocabulary={searchVocabulary}
           onSubmitQuery={onSearch}
           onHowItWorks={startTour}
@@ -230,23 +210,36 @@ export function App() {
           onReset={onResetFilters}
         />
         <ProductGrid
-          products={filteredProducts}
-          reviews={reviews}
-          matches={matches}
+          products={hits}
+          totalCount={results?.nbHits ?? hits.length}
+          currentPage={currentPageIndex + 1}
+          totalPages={Math.max(1, nbPages)}
+          onPageChange={(page) => refinePage(page - 1)}
           query={query}
           isSearching={isSearching}
-          onSelect={setSelectedId}
+          onSelect={setSelectedProduct}
           onClearQuery={onClearQuery}
         />
       </main>
-      {selectedProduct && (
-        <ProductModal
-          product={selectedProduct}
-          reviews={reviews}
-          matchInfo={selectedMatchInfo}
-          onClose={() => setSelectedId(null)}
-        />
-      )}
+      {selectedProduct && <ProductModal product={selectedProduct} onClose={() => setSelectedProduct(null)} />}
     </div>
+  );
+}
+
+export function App() {
+  if (!isAlgoliaConfigured) {
+    return (
+      <div className="flex items-center justify-center text-body text-sm p-8 text-center min-h-screen">
+        Search isn't configured: missing VITE_ALGOLIA_APPLICATION_ID / VITE_ALGOLIA_SEARCH_API_KEY. Copy
+        .env.example to .env and fill them in.
+      </div>
+    );
+  }
+
+  return (
+    <InstantSearch searchClient={searchClient} indexName={ALGOLIA_INDEX_NAME}>
+      <Configure hitsPerPage={HITS_PER_PAGE} />
+      <AppShell />
+    </InstantSearch>
   );
 }
